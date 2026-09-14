@@ -42,7 +42,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Moon Viewer — NASA-IBM LFM",
+    page_title="Moon POI Viewer — NASA-IBM LFM",
     page_icon="🌑",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -109,6 +109,7 @@ def load_moon_image() -> Image.Image:
 
 HOT_ZONES: list[dict] = [
     # id, label, bbox (left, top, right, bottom), feature_id in Astra DB
+    # ordered according to size, as bigger POIs contain some smaller POIs
     {
         "id": "tranquillitatis",
         "label": "Mare\nTranquillitatis",
@@ -117,17 +118,17 @@ HOT_ZONES: list[dict] = [
         "color": "#4a9eff",
     },
     {
-        "id": "serenitatis",
-        "label": "Mare\nSerenitatis",
-        "bbox": (360, 228, 450, 296),
-        "feature_id": "mare_serenitatis",
-        "color": "#4a9eff",
-    },
-    {
         "id": "imbrium",
         "label": "Mare\nImbrium",
         "bbox": (210, 170, 370, 300),
         "feature_id": "mare_imbrium",
+        "color": "#4a9eff",
+    },
+    {
+        "id": "serenitatis",
+        "label": "Mare\nSerenitatis",
+        "bbox": (360, 228, 450, 296),
+        "feature_id": "mare_serenitatis",
         "color": "#4a9eff",
     },
     {
@@ -268,14 +269,22 @@ def annotated_image(active_zone_id: Optional[str] = None) -> Image.Image:
 
         # Label centred inside the rectangle
         label = zone["label"].replace("\n", " ")
+
+        # Get rid of the Star emoji from the Apollo labels
+        index = label.find(" ⭐")
+        if index > -1:
+            label = label[:index]
+
         # PIL 10+ uses textbbox; fall back to textsize for older versions
         try:
             bbox = draw.textbbox((0, 0), label, font=font)
             tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         except AttributeError:
             tw, th = draw.textsize(label, font=font)  # type: ignore[attr-defined]
+
         cx = (l + r) // 2 - tw // 2
         cy = (t + b) // 2 - th // 2
+
         # Dark shadow for legibility
         draw.text((cx + 1, cy + 1), label, font=font, fill=(0, 0, 0, 200))
         draw.text((cx, cy), label, font=font, fill=(255, 255, 255, 230))
@@ -290,7 +299,8 @@ def annotated_image(active_zone_id: Optional[str] = None) -> Image.Image:
 
 def hit_test(x: int, y: int) -> Optional[dict]:
     """Return the first hot zone whose bounding box contains pixel (x, y)."""
-    for zone in HOT_ZONES:
+    # Testing for HOT_ZONES in reverse order to catch smaller POIs first.
+    for zone in reversed(HOT_ZONES):
         l, t, r, b = zone["bbox"]
         if l <= x <= r and t <= y <= b:
             return zone
@@ -402,7 +412,7 @@ def render_result_card(doc: dict, rank: int) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    st.title("🌑 Moon Viewer — NASA-IBM Lunar Foundation Model")
+    st.title("Moon POI Viewer — NASA-IBM Lunar Foundation Model")
     st.markdown(
         "Click a **hot zone** on the moon to embed the image patch and search for "
         "similar lunar features, or use the **text search** bar below."
@@ -430,7 +440,7 @@ def main() -> None:
         st.markdown(
             "**Model:** [NASA-IBM Lunar Foundation Model](https://huggingface.co/"
             "nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model)  \n"
-            "**Storage:** DataStax Astra DB (astrapy ≥ 2.0)  \n"
+            "**Storage:** DataStax Astra DB  \n"
             "**Image source:** NASA / GSFC / ASU"
         )
 
@@ -483,8 +493,7 @@ def main() -> None:
     left_col, right_col = st.columns([2, 1.2])
 
     with left_col:
-        st.subheader("Near-Side Moon Map")
-        st.caption("👆 Click a highlighted region on the map or a label button below.")
+        st.caption("Click a highlighted region on the map or a label button below.")
 
         # Single interactive image — active_zone is already up to date above.
         moon_img = annotated_image(st.session_state.active_zone)
@@ -526,7 +535,7 @@ def main() -> None:
                         f"{abs(lon):.2f}°{'E' if lon >= 0 else 'W'}"
                     )
         else:
-            st.subheader("🌑 Select a zone")
+            st.subheader("Select a zone")
             st.info("Click a highlighted region on the map, or use text search.")
 
         st.divider()
