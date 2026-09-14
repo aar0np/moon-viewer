@@ -194,6 +194,34 @@ HOT_ZONES: list[dict] = [
         "color": "#ffee44",
     },
     {
+        "id": "apollo12",
+        "label": "Apollo 12 ⭐",
+        "bbox": (246, 348, 282, 374),
+        "feature_id": "apollo_12_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo14",
+        "label": "Apollo 14 ⭐",
+        "bbox": (268, 350, 304, 376),
+        "feature_id": "apollo_14_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo15",
+        "label": "Apollo 15 ⭐",
+        "bbox": (345, 241, 381, 267),
+        "feature_id": "apollo_15_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo16",
+        "label": "Apollo 16 ⭐",
+        "bbox": (389, 370, 425, 396),
+        "feature_id": "apollo_16_landing",
+        "color": "#ffee44",
+    },
+    {
         "id": "apollo17",
         "label": "Apollo 17 ⭐",
         "bbox": (400, 236, 436, 262),
@@ -270,11 +298,15 @@ def hit_test(x: int, y: int) -> Optional[dict]:
 
 
 def crop_zone(zone: dict) -> Image.Image:
-    """Return the moon-image crop for a hot zone, resized to 224×224 for the model."""
+    """Return the raw moon-image crop for a zone at its natural aspect ratio."""
     moon = load_moon_image()
     l, t, r, b = zone["bbox"]
-    cropped = moon.crop((l, t, r, b))
-    return cropped.resize((224, 224), Image.LANCZOS)
+    return moon.crop((l, t, r, b))
+
+
+def crop_zone_for_model(zone: dict) -> Image.Image:
+    """Return the crop resized to 224×224 as required by the ViT-B encoder."""
+    return crop_zone(zone).resize((224, 224), Image.LANCZOS)
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +334,7 @@ def search_by_image_patch(zone: dict) -> list[dict]:
     if vec is None:
         # Feature not seeded — fall back to live image encoding
         embed_image = _get_embed_image()
-        crop = crop_zone(zone)
+        crop = crop_zone_for_model(zone)
         vec = embed_image(crop)
 
     return vector_search(vec, limit=6)
@@ -424,38 +456,57 @@ def main() -> None:
         st.session_state.active_zone = None
         st.session_state.last_click = None
 
-    # ── Moon image (clickable via streamlit-image-coordinates) ───────────────
+    # ── Resolve any pending image click BEFORE building the layout ────────────
+    # streamlit_image_coordinates stores the last-clicked coordinate in widget
+    # state between reruns.  We read it via st.session_state["moon_click"] (set
+    # by the component on the previous run) BEFORE rendering any widgets so we
+    # can update active_zone first.  The component is then rendered once — with
+    # the already-updated image — further down inside left_col, giving immediate
+    # highlighting with a single image on screen.
+    pending_click = st.session_state.get("moon_click")
+    if pending_click is not None:
+        click_tuple = (pending_click["x"], pending_click["y"])
+        if click_tuple != st.session_state.last_click:
+            st.session_state.last_click = click_tuple
+            zone = hit_test(pending_click["x"], pending_click["y"])
+            if zone is not None:
+                label = zone["label"].replace("\n", " ")
+                st.session_state.active_zone = zone["id"]
+                with st.spinner(f"Encoding image patch for {label} …"):
+                    results = search_by_image_patch(zone)
+                    if type_filter != "All":
+                        results = [r for r in results if r.get("type") == type_filter]
+                st.session_state.results = results
+                st.session_state.result_source = f"Image patch: {label}"
+
+    # ── Moon image + label buttons ────────────────────────────────────────────
     left_col, right_col = st.columns([2, 1.2])
 
     with left_col:
         st.subheader("Near-Side Moon Map")
-        st.caption("👆 Click directly on a highlighted region to search it.")
+        st.caption("👆 Click a highlighted region on the map or a label button below.")
+
+        # Single interactive image — active_zone is already up to date above.
         moon_img = annotated_image(st.session_state.active_zone)
+        streamlit_image_coordinates(moon_img, key="moon_click")
 
-        # streamlit_image_coordinates returns {"x": int, "y": int} on click,
-        # or None when the image has not been clicked yet in this render cycle.
-        click = streamlit_image_coordinates(moon_img, key="moon_click")
-
-        if click is not None:
-            click_tuple = (click["x"], click["y"])
-            if click_tuple != st.session_state.last_click:
-                # New click — run hit test and update session state.
-                # Do NOT call st.rerun() here: it would abort the script before
-                # right_col is rendered, so the results pane would never update
-                # in the same pass.  Streamlit triggers its own rerun after any
-                # session_state write, so the image highlight catches up on the
-                # next natural cycle.
-                st.session_state.last_click = click_tuple
-                zone = hit_test(click["x"], click["y"])
-                if zone is not None:
-                    label = zone["label"].replace("\n", " ")
-                    st.session_state.active_zone = zone["id"]
-                    with st.spinner(f"Encoding image patch for {label} …"):
-                        results = search_by_image_patch(zone)
-                        if type_filter != "All":
-                            results = [r for r in results if r.get("type") == type_filter]
-                    st.session_state.results = results
-                    st.session_state.result_source = f"Image patch: {label}"
+        # ── Hot-zone label buttons ────────────────────────────────────────────
+        zone_cols = st.columns(4)
+        for i, zone in enumerate(HOT_ZONES):
+            col = zone_cols[i % 4]
+            label = zone["label"].replace("\n", " ")
+            is_active = st.session_state.active_zone == zone["id"]
+            btn_type = "primary" if is_active else "secondary"
+            if col.button(label, key=f"btn_{zone['id']}", type=btn_type):
+                # Clear last_click so the image-click guard doesn't interfere
+                st.session_state.last_click = None
+                st.session_state.active_zone = zone["id"]
+                with st.spinner(f"Encoding image patch for {label} …"):
+                    results = search_by_image_patch(zone)
+                    if type_filter != "All":
+                        results = [r for r in results if r.get("type") == type_filter]
+                st.session_state.results = results
+                st.session_state.result_source = f"Image patch: {label}"
 
     with right_col:
         # ── Active zone detail ───────────────────────────────────────────────
@@ -463,7 +514,7 @@ def main() -> None:
             zone = ZONE_BY_ID[st.session_state.active_zone]
             st.subheader(f"🔎 {zone['label'].replace(chr(10), ' ')}")
             crop = crop_zone(zone)
-            st.image(crop, caption="Image patch sent to LFM encoder", width=200)
+            st.image(crop, caption="Image patch sent to LFM encoder", use_container_width=True)
 
             detail = get_seeded_feature(zone["feature_id"])
             if detail:

@@ -345,6 +345,60 @@ FEATURES: list[dict] = [
         "source": "NASA",
     },
     {
+        "_id": "apollo_14_landing",
+        "name": "Apollo 14 — Fra Mauro",
+        "type": "landing_site",
+        "description": (
+            "Apollo 14 landed on 5 February 1971 in the Fra Mauro highlands, the "
+            "same target region originally assigned to the ill-fated Apollo 13 mission. "
+            "Alan Shepard and Edgar Mitchell performed two EVAs, covering 3.45 km on "
+            "foot and collecting 42.28 kg of samples including fragments thought to "
+            "originate from deep within the lunar crust ejected by the Imbrium impact. "
+            "Shepard famously hit two golf balls with a makeshift club during the second "
+            "EVA, making him the only person to play golf on the Moon."
+        ),
+        "lat": -3.645,
+        "lon": -17.472,
+        "diameter_km": None,
+        "source": "NASA",
+    },
+    {
+        "_id": "apollo_15_landing",
+        "name": "Apollo 15 — Hadley-Apennine",
+        "type": "landing_site",
+        "description": (
+            "Apollo 15 landed on 30 July 1971 at the base of the Montes Apenninus "
+            "beside the Hadley Rille, a 1.5 km wide sinuous channel carved by ancient "
+            "lava flows. David Scott and James Irwin were the first to use the Lunar "
+            "Roving Vehicle, travelling 27.9 km across the surface over three EVAs. "
+            "They collected 77.31 kg of samples including the Genesis Rock — a "
+            "4.5-billion-year-old piece of the original lunar crust — from the "
+            "slopes of Hadley Delta."
+        ),
+        "lat": 26.132,
+        "lon": 3.634,
+        "diameter_km": None,
+        "source": "NASA",
+    },
+    {
+        "_id": "apollo_16_landing",
+        "name": "Apollo 16 — Descartes Highlands",
+        "type": "landing_site",
+        "description": (
+            "Apollo 16 landed on 21 April 1972 in the Descartes Highlands, the only "
+            "crewed mission to explore the lunar central highlands. John Young and "
+            "Charles Duke drove the Lunar Roving Vehicle 26.7 km over three EVAs, "
+            "collecting 95.71 kg of samples. The mission overturned the pre-flight "
+            "hypothesis that the highlands were formed by ancient volcanism; the rocks "
+            "proved to be impact breccias, showing the terrain was shaped entirely by "
+            "meteorite bombardment."
+        ),
+        "lat": -8.973,
+        "lon": 15.501,
+        "diameter_km": None,
+        "source": "NASA",
+    },
+    {
         "_id": "apollo_17_landing",
         "name": "Apollo 17 — Taurus-Littrow Valley",
         "type": "landing_site",
