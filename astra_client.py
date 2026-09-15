@@ -52,7 +52,7 @@ def get_or_create_collection():
     # Create collection definition
     collection_definition = CollectionDefinition(
         vector=CollectionVectorOptions(
-            dimension=VECTOR_DIMENSION, metric=VectorMetric.COSINE
+            dimension=VECTOR_DIMENSION, metric=VectorMetric.DOT_PRODUCT
         ),
     )
 

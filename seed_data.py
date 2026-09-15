@@ -310,6 +310,28 @@ FEATURES: list[dict] = [
         "diameter_km": 168.0,
         "source": "IAU/USGS",
     },
+    
+    {
+        "_id": "mount_marilyn",
+        "name": "Mount Marilyn",
+        "type": "mountain_range",
+        "description": (
+            "Mount Marilyn (officially Secchi theta) is a lunar mountain within the "
+            "Montes Secchi range, situated between Mare Fecunditatis to the east and "
+            "Mare Tranquillitatis to the west. It was informally named by astronaut "
+            "Jim Lovell for his wife Marilyn during the Apollo 8 mission in 1968, and "
+            "the name was officially recognised by the International Astronomical Union "
+            "on 26 July 2017. The mountain served as a landmark and navigation reference "
+            "during the Apollo missions — it was used by the crew of Apollo 10 to verify "
+            "their descent trajectory, and Jim Lovell pointed it out to his wife in the "
+            "1995 film Apollo 13. A small crater at its north tip is known as Secchi O."
+        ),
+        "lat": 1.13,
+        "lon": 40.00,
+        "diameter_km": None,
+        "source": "IAU/USGS",
+    },
+
     # ── APOLLO LANDING SITES ──────────────────────────────────────────────
     {
         "_id": "statio_tranquillitatis",

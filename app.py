@@ -188,6 +188,13 @@ HOT_ZONES: list[dict] = [
         "color": "#88dd55",
     },
     {
+        "id": "mount_marilyn",
+        "label": "Mount Marilyn",
+        "bbox": (479, 333, 515, 359),
+        "feature_id": "mount_marilyn",
+        "color": "#88dd55",
+    },
+    {
         "id": "apollo11",
         "label": "Apollo 11 ⭐",
         "bbox": (392, 340, 428, 366),
