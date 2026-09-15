@@ -1,4 +1,4 @@
-# 🌑 Moon Viewer — NASA-IBM Lunar Foundation Model
+# 🌑 Moon POI Viewer — NASA-IBM Lunar Foundation Model
 
 An interactive Python application that displays the near-side Moon, lets you
 click named **hot zones** (maria, craters, mountain ranges, landing sites) to
