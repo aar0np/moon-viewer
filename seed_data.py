@@ -256,6 +256,21 @@ FEATURES: list[dict] = [
         "diameter_km": 32.0,
         "source": "IAU/USGS",
     },
+    {
+        "_id": "surveyor_crater",
+        "name": "Surveyor Crater",
+        "type": "crater",
+        "description": (
+            "This crater was named for the Surveyor 3 spacecraft, which landed within "
+            "the crater, near the east rim. Apollo 12 landed just north of the Surveyor "
+            "Crater on November 19, 1969. Astronauts Pete Conrad and Alan Bean removed "
+            "several pieces of Surveyor 3 before returning to the lunar module."
+        ),
+        "lat": -3.02,
+        "lon": -23.42,
+        "diameter_km": 0.2,
+        "source": "IAU/USGS",
+    },
     # ── MOUNTAIN RANGES & HIGHLANDS ───────────────────────────────────────
     {
         "_id": "montes_apenninus",

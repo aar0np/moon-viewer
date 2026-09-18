@@ -181,6 +181,13 @@ HOT_ZONES: list[dict] = [
         "color": "#ff9944",
     },
     {
+        "id": "surveyor_crater",
+        "label": "Surveyor\nCrater",
+        "bbox": (246, 343, 282, 379),
+        "feature_id": "surveyor_crater",
+        "color": "#ff9944",
+    },
+    {
         "id": "apenninus",
         "label": "Montes\nApenninus",
         "bbox": (330, 252, 420, 296),
