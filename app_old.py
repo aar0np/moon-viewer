@@ -1,33 +1,27 @@
 """
-app_csv.py
-----------
-Moon Viewer — interactive Streamlit application (CSV-driven hot zones).
+app.py
+------
+Moon Viewer — interactive Streamlit application.
 
-Identical to app.py except that HOT_ZONES is built dynamically from
-data/moon_poi.csv rather than being hard-coded.  Bounding boxes are
-computed from each feature's selenographic coordinates using the same
-mapping as the original app:
-
-    x_pixel = 350 + lon_deg * (330 / 90)
-    y_pixel = 350 − lat_deg * (330 / 90)
-
-Features whose computed centre falls outside the near-side disc
-(distance > 330 px from centre at 350, 350) are skipped automatically,
-which naturally excludes far-side features such as the South Pole–Aitken
-Basin.
-
-Box half-size scales with diameter_km (clamped to a minimum of 18 px so
-small craters and landing sites remain clickable).
+Features:
+  • Full-disk near-side moon image with clickable hot zones.
+  • Each hot zone corresponds to a named lunar feature.  Clicking a zone crops
+    that region, encodes it with the NASA-IBM Lunar Foundation Model (ViT-B
+    backbone → 768-d embedding), and queries Astra DB for the most similar
+    features.
+  • A text search bar embeds the query text (384-d MiniLM → projected 768-d)
+    and retrieves the closest matching features from Astra DB.
+  • Results are displayed as expandable cards with name, type, coordinates,
+    diameter, description, and similarity score.
 
 Run:
-    streamlit run app_csv.py
+    streamlit run app.py
 """
 
 from __future__ import annotations
 
-import csv
 import io
-import math
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -100,125 +94,161 @@ def load_moon_image() -> Image.Image:
 
 
 # ---------------------------------------------------------------------------
-# Hot-zone construction from CSV
+# Hot-zone definitions
 # ---------------------------------------------------------------------------
+# Each zone maps a named lunar feature to a bounding box (left, top, right,
+# bottom) in the 700×700 coordinate space.
+#
+# The near-side moon disc occupies roughly the full 700×700 canvas.
+# Coordinates are approximate and calibrated to a standard full-disk image.
+# The disc centre is at (350, 350), radius ≈ 330 px.
+#
+# Selenographic mapping (rough):
+#   x_pixel = 350 + lon_deg * (330 / 90)   [0° lon → disc centre]
+#   y_pixel = 350 − lat_deg * (330 / 90)   [0° lat → disc centre, N is up]
 
-# Disc geometry (700×700 canvas)
-_DISC_CX    = 350     # pixel x of selenographic 0°, 0°
-_DISC_CY    = 350     # pixel y of selenographic 0°, 0°
-_DISC_R     = 330     # disc radius in pixels
-_PX_PER_DEG = 330 / 90  # ≈ 3.667 px / degree
+HOT_ZONES: list[dict] = [
+    # id, label, bbox (left, top, right, bottom), feature_id in Astra DB
+    # ordered according to size, as bigger POIs contain some smaller POIs
+    #
+    # Bboxes are centred on the selenographic projection:
+    #   x = 350 + lon * (330/90),  y = 350 - lat * (330/90)
+    # Box sizes (w × h) are preserved from the original hand-calibrated values.
+    {
+        "id": "tranquillitatis",
+        "label": "Mare\nTranquillitatis",
+        "bbox": (415, 305, 515, 331),   # cx=465, cy=318  (was 428,346 — Δ+37,-28)
+        "feature_id": "mare_tranquillitatis",
+        "color": "#4a9eff",
+    },
+    {
+        "id": "imbrium",
+        "label": "Mare\nImbrium",
+        "bbox": (212, 164, 372, 294),   # cx=292, cy=229  (was 290,235 — Δ+2,-6)
+        "feature_id": "mare_imbrium",
+        "color": "#4a9eff",
+    },
+    {
+        "id": "serenitatis",
+        "label": "Mare\nSerenitatis",
+        "bbox": (369, 213, 459, 281),   # cx=414, cy=247  (was 405,262 — Δ+9,-15)
+        "feature_id": "mare_serenitatis",
+        "color": "#4a9eff",
+    },
+    {
+        "id": "crisium",
+        "label": "Mare\nCrisium",
+        "bbox": (531, 263, 601, 311),   # cx=566, cy=287  (was 525,272 — Δ+41,+15)
+        "feature_id": "mare_crisium",
+        "color": "#4a9eff",
+    },
+    {
+        "id": "procellarum",
+        "label": "Oceanus\nProcellarum",
+        "bbox": (49, 326, 229, 446),    # cx=139, cy=386  (was 190,370 — Δ-51,+16)
+        "feature_id": "oceanus_procellarum",
+        "color": "#2266cc",
+    },
+    {
+        "id": "tycho",
+        "label": "Tycho",
+        "bbox": (284, 484, 332, 532),   # cx=308, cy=508  (was 306,502 — Δ+2,+6)
+        "feature_id": "crater_tycho",
+        "color": "#ff9944",
+    },
+    {
+        "id": "copernicus",
+        "label": "Copernicus",
+        "bbox": (251, 294, 301, 334),   # cx=276, cy=314  (was 260,338 — Δ+16,-24)
+        "feature_id": "crater_copernicus",
+        "color": "#ff9944",
+    },
+    {
+        "id": "clavius",
+        "label": "Clavius",
+        "bbox": (264, 539, 330, 589),   # cx=297, cy=564  (was 297,555 — Δ0,+9)
+        "feature_id": "crater_clavius",
+        "color": "#ff9944",
+    },
+    {
+        "id": "aristarchus",
+        "label": "Aristarchus",
+        "bbox": (154, 243, 198, 283),   # cx=176, cy=263  (was 168,286 — Δ+8,-23)
+        "feature_id": "crater_aristarchus",
+        "color": "#ff9944",
+    },
+    {
+        "id": "plato",
+        "label": "Plato",
+        "bbox": (290, 141, 340, 179),   # cx=315, cy=160  (was 315,181 — Δ0,-21)
+        "feature_id": "crater_plato",
+        "color": "#ff9944",
+    },
+    {
+        "id": "surveyor_crater",
+        "label": "Surveyor\nCrater",
+        "bbox": (246, 343, 282, 379),   # cx=264, cy=361  (unchanged — exact match)
+        "feature_id": "surveyor_crater",
+        "color": "#ff9944",
+    },
+    {
+        "id": "apenninus",
+        "label": "Montes\nApenninus",
+        "bbox": (293, 258, 383, 302),   # cx=338, cy=280  (was 375,274 — Δ-37,+6)
+        "feature_id": "montes_apenninus",
+        "color": "#88dd55",
+    },
+    {
+        "id": "mount_marilyn",
+        "label": "Mount Marilyn",
+        "bbox": (478, 332, 514, 358),   # cx=496, cy=345  (was 497,346 — Δ-1,-1)
+        "feature_id": "mount_marilyn",
+        "color": "#88dd55",
+    },
+    {
+        "id": "apollo11",
+        "label": "Apollo 11 ⭐",
+        "bbox": (418, 334, 454, 360),   # cx=436, cy=347  (was 410,353 — Δ+26,-6)
+        "feature_id": "statio_tranquillitatis",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo12",
+        "label": "Apollo 12 ⭐",
+        "bbox": (246, 348, 282, 374),   # cx=264, cy=361  (unchanged — exact match)
+        "feature_id": "apollo_12_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo14",
+        "label": "Apollo 14 ⭐",
+        "bbox": (267, 350, 303, 376),   # cx=285, cy=363  (was 286,363 — Δ-1,0)
+        "feature_id": "apollo_14_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo15",
+        "label": "Apollo 15 ⭐",
+        "bbox": (345, 241, 381, 267),   # cx=363, cy=254  (unchanged — exact match)
+        "feature_id": "apollo_15_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo16",
+        "label": "Apollo 16 ⭐",
+        "bbox": (388, 369, 424, 395),   # cx=406, cy=382  (was 407,383 — Δ-1,-1)
+        "feature_id": "apollo_16_landing",
+        "color": "#ffee44",
+    },
+    {
+        "id": "apollo17",
+        "label": "Apollo 17 ⭐",
+        "bbox": (444, 262, 480, 288),   # cx=462, cy=275  (was 418,249 — Δ+44,+26; corrected)
+        "feature_id": "apollo_17_landing",
+        "color": "#ffee44",
+    },
+]
 
-# Per-type colour palette
-TYPE_COLOR: dict[str, str] = {
-    "mare":           "#4a9eff",
-    "oceanus":        "#2266cc",
-    "crater":         "#ff9944",
-    "mountain_range": "#88dd55",
-    "impact_basin":   "#88dd55",
-    "valley":         "#88dd55",
-    "landing_site":   "#ffee44",
-}
-_DEFAULT_COLOR = "#aaaaaa"
-
-# Box half-size scaling: larger features get bigger boxes, with min/max clamps.
-_MIN_HALF = 18    # px — keeps tiny features (landing sites) clickable
-_MAX_HALF = 90    # px — prevents huge maria from dominating the whole disc
-_DIAM_SCALE = 0.06  # px per km of diameter
-
-
-def _half_size(diameter_km: Optional[float]) -> int:
-    """Return the box half-size in pixels for a feature of given diameter."""
-    if diameter_km is None or diameter_km == 0:
-        return _MIN_HALF
-    return int(max(_MIN_HALF, min(_MAX_HALF, diameter_km * _DIAM_SCALE)))
-
-
-def _label(name: str, feature_type: str) -> str:
-    """Build a display label for a feature.
-
-    Landing sites are condensed to 'Apollo NN ⭐' by extracting the mission
-    number from anywhere in the name (handles both 'Apollo 12 Landing Site'
-    and 'Statio Tranquillitatis (Apollo 11)').
-
-    Other multi-word names are split across two lines so the label fits inside
-    its bounding box (mirrors the hand-authored style in app.py).
-    """
-    if feature_type == "landing_site":
-        import re
-        match = re.search(r"Apollo\s+(\d+)", name, re.IGNORECASE)
-        if match:
-            return f"Apollo {int(match.group(1)):02d} ⭐"
-        return name + " ⭐"
-
-    # Non-landing-site: split long names onto two lines
-    words = name.split()
-    if len(words) >= 3:
-        mid = len(words) // 2
-        return " ".join(words[:mid]) + "\n" + " ".join(words[mid:])
-    return name
-
-
-CSV_PATH = Path(__file__).parent / "data" / "moon_poi.csv"
-
-
-@st.cache_data(show_spinner=False)
-def build_hot_zones() -> list[dict]:
-    """
-    Read moon_poi.csv and compute a HOT_ZONES list.
-
-    Each row becomes one zone dict with keys:
-        id, label, bbox (left, top, right, bottom), feature_id, color
-
-    Rows whose projected centre lies outside the near-side disc are silently
-    skipped (e.g. far-side features with lon > 90° or lon < −90°).
-
-    Zones are sorted largest-first so that hit_test() can find small features
-    that overlap larger ones by iterating in reverse.
-    """
-    zones: list[dict] = []
-
-    with CSV_PATH.open(newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            lat = float(row["lat"])
-            lon = float(row["lon"])
-            raw_diam = row["diameter_km"].strip()
-            diameter_km = float(raw_diam) if raw_diam else None
-            feature_type = row["type"].strip()
-            fid = row["_id"].strip()
-
-            # Project to pixel space
-            cx = _DISC_CX + lon * _PX_PER_DEG
-            cy = _DISC_CY - lat * _PX_PER_DEG
-
-            # Skip features whose centre is off the near-side disc
-            dist = math.hypot(cx - _DISC_CX, cy - _DISC_CY)
-            if dist > _DISC_R:
-                continue
-
-            half = _half_size(diameter_km)
-            bbox = (
-                int(cx - half),
-                int(cy - half),
-                int(cx + half),
-                int(cy + half),
-            )
-
-            zones.append({
-                "id":         fid,
-                "label":      _label(row["name"].strip(), feature_type),
-                "bbox":       bbox,
-                "feature_id": fid,
-                "color":      TYPE_COLOR.get(feature_type, _DEFAULT_COLOR),
-            })
-
-    # Sort largest bounding-box area first; hit_test reverses the list so
-    # smaller zones on top are matched before the larger ones beneath them.
-    zones.sort(key=lambda z: (z["bbox"][2] - z["bbox"][0]) * (z["bbox"][3] - z["bbox"][1]), reverse=True)
-    return zones
-
-
-HOT_ZONES: list[dict] = build_hot_zones()
 ZONE_BY_ID: dict[str, dict] = {z["id"]: z for z in HOT_ZONES}
 
 
@@ -258,7 +288,7 @@ def annotated_image(active_zone_id: Optional[str] = None) -> Image.Image:
         # Label centred inside the rectangle
         label = zone["label"].replace("\n", " ")
 
-        # Strip the star emoji for the overlay label
+        # Get rid of the Star emoji from the Apollo labels
         index = label.find(" ⭐")
         if index > -1:
             label = label[:index]
@@ -287,8 +317,7 @@ def annotated_image(active_zone_id: Optional[str] = None) -> Image.Image:
 
 def hit_test(x: int, y: int) -> Optional[dict]:
     """Return the first hot zone whose bounding box contains pixel (x, y)."""
-    # Iterate in reverse so smaller zones (appended later after sort reversal)
-    # are tested before the large zones that contain them.
+    # Testing for HOT_ZONES in reverse order to catch smaller POIs first.
     for zone in reversed(HOT_ZONES):
         l, t, r, b = zone["bbox"]
         if l <= x <= r and t <= y <= b:
@@ -414,7 +443,7 @@ def main() -> None:
             "Search lunar features",
             placeholder="e.g. volcanic basalt plains, Apollo landing, ice deposit …",
         )
-        search_btn = st.button("Search", width='content')
+        search_btn = st.button("Search", use_container_width=True)
 
         st.divider()
         st.markdown("### Filter by type")
@@ -440,6 +469,7 @@ def main() -> None:
         st.session_state.results = []
     if "result_source" not in st.session_state:
         st.session_state.result_source = ""
+    # Track the last click coordinate so we only re-search on a new click
     if "last_click" not in st.session_state:
         st.session_state.last_click = None
 
@@ -455,6 +485,12 @@ def main() -> None:
         st.session_state.last_click = None
 
     # ── Resolve any pending image click BEFORE building the layout ────────────
+    # streamlit_image_coordinates stores the last-clicked coordinate in widget
+    # state between reruns.  We read it via st.session_state["moon_click"] (set
+    # by the component on the previous run) BEFORE rendering any widgets so we
+    # can update active_zone first.  The component is then rendered once — with
+    # the already-updated image — further down inside left_col, giving immediate
+    # highlighting with a single image on screen.
     pending_click = st.session_state.get("moon_click")
     if pending_click is not None:
         click_tuple = (pending_click["x"], pending_click["y"])
@@ -477,6 +513,7 @@ def main() -> None:
     with left_col:
         st.caption("Click a highlighted region on the map or a label button below.")
 
+        # Single interactive image — active_zone is already up to date above.
         moon_img = annotated_image(st.session_state.active_zone)
         streamlit_image_coordinates(moon_img, key="moon_click")
 
@@ -488,6 +525,7 @@ def main() -> None:
             is_active = st.session_state.active_zone == zone["id"]
             btn_type = "primary" if is_active else "secondary"
             if col.button(label, key=f"btn_{zone['id']}", type=btn_type):
+                # Clear last_click so the image-click guard doesn't interfere
                 st.session_state.last_click = None
                 st.session_state.active_zone = zone["id"]
                 with st.spinner(f"Encoding image patch for {label} …"):
@@ -503,7 +541,7 @@ def main() -> None:
             zone = ZONE_BY_ID[st.session_state.active_zone]
             st.subheader(f"🔎 {zone['label'].replace(chr(10), ' ')}")
             crop = crop_zone(zone)
-            st.image(crop, caption="Image patch sent to LFM encoder", width='content')
+            st.image(crop, caption="Image patch sent to LFM encoder", use_container_width=True)
 
             detail = get_seeded_feature(zone["feature_id"])
             if detail:
