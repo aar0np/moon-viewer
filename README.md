@@ -141,9 +141,11 @@ specific feature category.
 ```
 moon-viewer/
 ├── app.py              # Streamlit UI — hot zones, text search, result cards
+├── app_old.py          # Streamlit UI — hot zones, text search, result cards; original, hard-coded hot zones
 ├── model.py            # NASA-IBM LFM image encoder + MiniLM text encoder
 ├── astra_client.py     # astrapy ≥ 2.0 wrapper (collection, search, upsert)
 ├── seed_data.py        # Populate Astra DB with canonical lunar features
+├── seed_data_old.py    # Populate Astra DB with canonical lunar features; original, hard-coded FEATURES
 ├── requirements.txt
 ├── .env.example
 ├── assets/
