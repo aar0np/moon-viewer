@@ -6,6 +6,8 @@ encode the image patch with the NASA-IBM Lunar Foundation Model and search for
 similar features, and also provides a **text search** bar backed by the same
 semantic vector space — all stored in DataStax **Astra DB**.
 
+<img src="assets/moon_poi_viewer.png" width="600" />
+
 ---
 
 ## Architecture
