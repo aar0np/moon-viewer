@@ -159,7 +159,7 @@ moon-viewer/
 
 ## Extending the Dataset
 
-Add entries to the `FEATURES` list in [`seed_data.py`](seed_data.py) following
+Add entries to the `data/moon_poi.csv` file  following
 the same schema and re-run `python seed_data.py`.  Each document requires at
 minimum `_id`, `name`, `type`, `description`, `lat`, `lon`.
 
