@@ -5,16 +5,14 @@ Moon Viewer — interactive Streamlit application (CSV-driven hot zones).
 
 Identical to app.py except that HOT_ZONES is built dynamically from
 data/moon_poi.csv rather than being hard-coded.  Bounding boxes are
-computed from each feature's selenographic coordinates using the same
-mapping as the original app:
+computed from each feature's selenographic coordinates using an
+orthographic projection onto the disc in the source image.  The photo
+shows libration and is slightly rotated, so the projection is centred on
+a fitted sub-observer point (_SUB_LAT, _SUB_LON) and rotated by _ROT_DEG;
+the result is then scaled to the 700×700 display canvas.
 
-    x_pixel = 350 + lon_deg * (330 / 90)
-    y_pixel = 350 − lat_deg * (330 / 90)
-
-Features whose computed centre falls outside the near-side disc
-(distance > 330 px from centre at 350, 350) are skipped automatically,
-which naturally excludes far-side features such as the South Pole–Aitken
-Basin.
+Features on the far side (not visible from the sub-observer point) are
+skipped automatically, e.g. the South Pole–Aitken Basin.
 
 Box half-size scales with diameter_km (clamped to a minimum of 18 px so
 small craters and landing sites remain clickable).
@@ -103,11 +101,22 @@ def load_moon_image() -> Image.Image:
 # Hot-zone construction from CSV
 # ---------------------------------------------------------------------------
 
-# Disc geometry (700×700 canvas)
-_DISC_CX    = 350     # pixel x of selenographic 0°, 0°
-_DISC_CY    = 350     # pixel y of selenographic 0°, 0°
-_DISC_R     = 330     # disc radius in pixels
-_PX_PER_DEG = 330 / 90  # ≈ 3.667 px / degree
+# Disc geometry in source-image pixels (measured on assets/moon.jpg, 1280×1216)
+_SRC_W      = 1280
+_SRC_H      = 1216
+_DISC_CX    = 640     # pixel x of disc centre
+_DISC_CY    = 620     # pixel y of disc centre
+_DISC_R     = 532     # disc radius in pixels
+
+# Viewing geometry, least-squares fitted to Tycho, Plato, Aristarchus, Kepler
+# and Grimaldi (residuals < 4 px)
+_SUB_LAT    = -5.73   # selenographic latitude facing the camera (°)
+_SUB_LON    = -3.60   # selenographic longitude facing the camera (°)
+_ROT_DEG    = -15.25  # rotation of lunar north from image up (°)
+
+# Source → display scale factors (the display canvas is stretched to 700×700)
+_SX = DISPLAY_W / _SRC_W
+_SY = DISPLAY_H / _SRC_H
 
 # Per-type colour palette
 TYPE_COLOR: dict[str, str] = {
@@ -187,14 +196,23 @@ def build_hot_zones() -> list[dict]:
             feature_type = row["type"].strip()
             fid = row["_id"].strip()
 
-            # Project to pixel space
-            cx = _DISC_CX + lon * _PX_PER_DEG
-            cy = _DISC_CY - lat * _PX_PER_DEG
+            # Orthographic projection centred on the sub-observer point
+            lat_r = math.radians(lat)
+            dlon = math.radians(lon - _SUB_LON)
+            b0 = math.radians(_SUB_LAT)
+            xp = math.cos(lat_r) * math.sin(dlon)
+            yp = math.cos(b0) * math.sin(lat_r) - math.sin(b0) * math.cos(lat_r) * math.cos(dlon)
 
-            # Skip features whose centre is off the near-side disc
-            dist = math.hypot(cx - _DISC_CX, cy - _DISC_CY)
-            if dist > _DISC_R:
+            # Skip far-side features
+            if math.sin(b0) * math.sin(lat_r) + math.cos(b0) * math.cos(lat_r) * math.cos(dlon) < 0:
                 continue
+
+            # Rotate by the image's position angle, then scale to display
+            rot = math.radians(_ROT_DEG)
+            x = xp * math.cos(rot) - yp * math.sin(rot)
+            y = xp * math.sin(rot) + yp * math.cos(rot)
+            cx = (_DISC_CX + _DISC_R * x) * _SX
+            cy = (_DISC_CY - _DISC_R * y) * _SY
 
             half = _half_size(diameter_km)
             bbox = (
