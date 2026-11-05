@@ -27,7 +27,7 @@ from astrapy import DataAPIClient
 from astrapy.constants import VectorMetric
 from astrapy.info import CollectionDefinition, CollectionVectorOptions
 
-COLLECTION_NAME = "moon_features"
+COLLECTION_NAME = os.environ["ASTRA_DB_COLLECTION"]
 VECTOR_DIMENSION = 768
 
 

@@ -71,7 +71,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# edit .env and fill in ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN
+# edit .env and fill in ASTRA_DB_API_ENDPOINT, ASTRA_DB_APPLICATION_TOKEN, ASTRA_DB_KEYSPACE, and ASTRA_DB_COLLECTION.
 ```
 
 Your Astra DB **API Endpoint** and **Application Token** are found in the
